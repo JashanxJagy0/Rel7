@@ -80,6 +80,9 @@ BOT_OWNER_ID = 6083286836
 MIN_BALANCE = 0.1
 DEBUG_EMOJI_GAMES = False  # Set to True to enable detailed emoji game logging
 
+# Roll display separator for emoji games
+ROLL_SEPARATOR = ", "  # Separator for displaying multiple roll values (e.g., "4, 5, 6")
+
 # Helper bot animation timing (faster than main bot)
 HELPER_BOT_ANIMATION_DELAY = 0.3  # Seconds to wait after helper bot sends animation (dice, slots, darts, etc.)
 
@@ -8810,6 +8813,10 @@ async def slots_rebet_double_callback(update: Update, context: ContextTypes.DEFA
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
+def extract_game_name(game_type: str) -> str:
+    """Extract readable game name from game_type string"""
+    return game_type.replace('pvp_', '').replace('pvb_', '').replace('group_challenge_', '').replace('xdxw_', '').upper()
+
 # --- Helper function to check for ongoing emoji games ---
 def get_user_active_emoji_game(user_id: int):
     """
@@ -8853,8 +8860,7 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(message_text) > 1:  # User wants to start a new game (not just opening menu)
         ongoing_game_id, ongoing_game_type = get_user_active_emoji_game(user.id)
         if ongoing_game_id:
-            # Extract readable game name from game_type
-            game_name = ongoing_game_type.replace('pvp_', '').replace('pvb_', '').replace('group_challenge_', '').replace('xdxw_', '').upper()
+            game_name = extract_game_name(ongoing_game_type)
             await update.message.reply_text(
                 f"⚠️ You already have an ongoing <b>{game_name}</b> match (ID: <code>{ongoing_game_id}</code>).\n\n"
                 f"Please complete it first before starting a new game!",
@@ -8906,8 +8912,7 @@ async def darts_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(message_text) > 1:  # User wants to start a new game (not just opening menu)
         ongoing_game_id, ongoing_game_type = get_user_active_emoji_game(user.id)
         if ongoing_game_id:
-            # Extract readable game name from game_type
-            game_name = ongoing_game_type.replace('pvp_', '').replace('pvb_', '').replace('group_challenge_', '').replace('xdxw_', '').upper()
+            game_name = extract_game_name(ongoing_game_type)
             await update.message.reply_text(
                 f"⚠️ You already have an ongoing <b>{game_name}</b> match (ID: <code>{ongoing_game_id}</code>).\n\n"
                 f"Please complete it first before starting a new game!",
@@ -8959,8 +8964,7 @@ async def football_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(message_text) > 1:  # User wants to start a new game (not just opening menu)
         ongoing_game_id, ongoing_game_type = get_user_active_emoji_game(user.id)
         if ongoing_game_id:
-            # Extract readable game name from game_type
-            game_name = ongoing_game_type.replace('pvp_', '').replace('pvb_', '').replace('group_challenge_', '').replace('xdxw_', '').upper()
+            game_name = extract_game_name(ongoing_game_type)
             await update.message.reply_text(
                 f"⚠️ You already have an ongoing <b>{game_name}</b> match (ID: <code>{ongoing_game_id}</code>).\n\n"
                 f"Please complete it first before starting a new game!",
@@ -9012,8 +9016,7 @@ async def bowling_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(message_text) > 1:  # User wants to start a new game (not just opening menu)
         ongoing_game_id, ongoing_game_type = get_user_active_emoji_game(user.id)
         if ongoing_game_id:
-            # Extract readable game name from game_type
-            game_name = ongoing_game_type.replace('pvp_', '').replace('pvb_', '').replace('group_challenge_', '').replace('xdxw_', '').upper()
+            game_name = extract_game_name(ongoing_game_type)
             await update.message.reply_text(
                 f"⚠️ You already have an ongoing <b>{game_name}</b> match (ID: <code>{ongoing_game_id}</code>).\n\n"
                 f"Please complete it first before starting a new game!",
@@ -12386,8 +12389,7 @@ async def pvb_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Check for ongoing game before starting a new one
         ongoing_game_id, ongoing_game_type = get_user_active_emoji_game(user.id)
         if ongoing_game_id:
-            # Extract readable game name from game_type
-            game_name = ongoing_game_type.replace('pvp_', '').replace('pvb_', '').replace('group_challenge_', '').replace('xdxw_', '').upper()
+            game_name = extract_game_name(ongoing_game_type)
             await query.answer(
                 f"⚠️ You have an ongoing {game_name} match (ID: {ongoing_game_id}). Complete it first!",
                 show_alert=True
@@ -12963,13 +12965,13 @@ async def message_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # User finished rolling
             user_rolls = game['user_rolls']
             user_total = sum(user_rolls)
-            user_rolls_text = " + ".join(str(r) for r in user_rolls)
+            user_rolls_text = ROLL_SEPARATOR.join(str(r) for r in user_rolls)
             
             if bot_rolls_first:
                 # Bot already rolled, so we have bot_rolls
                 bot_rolls = game.get('bot_rolls', [])
                 bot_total = sum(bot_rolls)
-                bot_rolls_text = " + ".join(str(r) for r in bot_rolls)
+                bot_rolls_text = ROLL_SEPARATOR.join(str(r) for r in bot_rolls)
                 
                 # Determine winner based on mode
                 win = False
@@ -13041,7 +13043,7 @@ async def message_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 game["bot_rolls"] = bot_rolls
                 bot_total = sum(bot_rolls)
-                bot_rolls_text = " + ".join(str(r) for r in bot_rolls)
+                bot_rolls_text = ROLL_SEPARATOR.join(str(r) for r in bot_rolls)
                 
                 # Determine winner based on mode
                 win = False
@@ -13138,7 +13140,7 @@ async def message_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     
                     game["bot_rolls"] = bot_rolls
                     bot_total = sum(bot_rolls)
-                    bot_rolls_text = ", ".join(str(r) for r in bot_rolls)
+                    bot_rolls_text = ROLL_SEPARATOR.join(str(r) for r in bot_rolls)
                     
                     username_display = user.first_name if user.first_name else "Player"
                     await update.message.reply_text(
@@ -18108,7 +18110,7 @@ async def play_vs_bot_game_from_callback(query, context: ContextTypes.DEFAULT_TY
         
         game_sessions[game_id]["bot_rolls"] = bot_rolls
         bot_total = sum(bot_rolls)
-        bot_rolls_text = ", ".join(str(r) for r in bot_rolls)
+        bot_rolls_text = ROLL_SEPARATOR.join(str(r) for r in bot_rolls)
         
         game_sessions[game_id]["waiting_for"] = "user"
         
