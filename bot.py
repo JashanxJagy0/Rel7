@@ -6286,14 +6286,14 @@ async def coin_flip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
     keyboard = [
-        [InlineKeyboardButton("🪙 Heads", callback_data=f"flip_pick_{game_id}_Heads"),
-         InlineKeyboardButton("🪙 Tails", callback_data=f"flip_pick_{game_id}_Tails")]
+        [apply_button_style(InlineKeyboardButton("🪙 Heads", callback_data=f"flip_pick_{game_id}_Heads"), 'primary'),
+         apply_button_style(InlineKeyboardButton("🪙 Tails", callback_data=f"flip_pick_{game_id}_Tails"), 'primary')]
     ]
     await update.message.reply_text(
         f"🪙 <b>Coin Flip Started!</b> (ID: <code>{game_id}</code>)\n\n💰 Bet: ${bet:.2f}\nChoose Heads or Tails!\n\n"
         f"🎯 Current Multiplier: 1.94x",
         parse_mode=ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=create_styled_keyboard(keyboard)
     )
 
 @check_banned
@@ -6335,16 +6335,16 @@ async def coin_flip_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             win_amount = game["bet_amount"] * multiplier
             next_multiplier = 1.94 * (2 ** game["streak"])
             keyboard = [
-                [InlineKeyboardButton("🪙 Heads", callback_data=f"flip_pick_{game_id}_Heads"),
-                 InlineKeyboardButton("🪙 Tails", callback_data=f"flip_pick_{game_id}_Tails")],
-                [InlineKeyboardButton(f"💸 Cash Out (${win_amount:.2f})", callback_data=f"flip_cashout_{game_id}")]
+                [apply_button_style(InlineKeyboardButton("🪙 Heads", callback_data=f"flip_pick_{game_id}_Heads"), 'primary'),
+                 apply_button_style(InlineKeyboardButton("🪙 Tails", callback_data=f"flip_pick_{game_id}_Tails"), 'primary')],
+                [apply_button_style(InlineKeyboardButton(f"💸 Cash Out (${win_amount:.2f})", callback_data=f"flip_cashout_{game_id}"), 'success')]
             ]
             await query.edit_message_text(
                 f"🎉 <b>Correct!</b> The coin landed on {pick}!\n\n"
                 f"💰 Current Win: <b>${win_amount:.2f}</b>\n🔥 Streak: {game['streak']}\n"
                 f"🎯 Next Multiplier: {next_multiplier:.2f}x\n\nContinue playing or cash out?\nID: <code>{game_id}</code>",
                 parse_mode=ParseMode.HTML,
-                reply_markup=InlineKeyboardMarkup(keyboard)
+                reply_markup=create_styled_keyboard(keyboard)
             )
         else:
             game["status"] = 'completed'
@@ -6482,14 +6482,14 @@ async def coinflip_rebet_double_callback(update: Update, context: ContextTypes.D
     save_user_data(user.id)
 
     keyboard = [
-        [InlineKeyboardButton("🪙 Heads", callback_data=f"flip_pick_{game_id}_Heads"),
-         InlineKeyboardButton("🪙 Tails", callback_data=f"flip_pick_{game_id}_Tails")]
+        [apply_button_style(InlineKeyboardButton("🪙 Heads", callback_data=f"flip_pick_{game_id}_Heads"), 'primary'),
+         apply_button_style(InlineKeyboardButton("🪙 Tails", callback_data=f"flip_pick_{game_id}_Tails"), 'primary')]
     ]
     await query.edit_message_text(
         f"🪙 <b>Coin Flip Started!</b> (ID: <code>{game_id}</code>)\n\n💰 Bet: ${bet:.2f}\nChoose Heads or Tails!\n\n"
         f"🎯 Current Multiplier: 1.94x",
         parse_mode=ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=create_styled_keyboard(keyboard)
     )
 
 # 2B. HIGH-LOW CARD GAME
@@ -6629,25 +6629,25 @@ async def highlow_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     low_mult = calculate_highlow_multiplier(current_card, deck, "low")
     tie_mult = calculate_highlow_multiplier(current_card, deck, "tie")
     
-    # Build keyboard - conditionally show buttons based on card
-    buttons = []
+    # Build keyboard - row 1: Higher/Lower, row 2: Tie, row 3: Skip/Cashout
+    row1 = []
     
     # Add Higher button only if not King (13)
     if current_card != 13:
-        buttons.append(InlineKeyboardButton(f"⬆️ Higher ({high_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_high"))
+        row1.append(apply_button_style(InlineKeyboardButton(f"⬆️ Higher ({high_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_high"), 'primary'))
     
     # Add Lower button only if not Ace (1)
     if current_card != 1:
-        buttons.append(InlineKeyboardButton(f"⬇️ Lower ({low_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_low"))
+        row1.append(apply_button_style(InlineKeyboardButton(f"⬇️ Lower ({low_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_low"), 'success'))
     
-    # Always add Tie button
-    buttons.append(InlineKeyboardButton(f"🔄 Tie ({tie_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_tie"))
+    # Row 2: Tie button
+    row2 = [apply_button_style(InlineKeyboardButton(f"🔄 Tie ({tie_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_tie"), 'primary')]
     
-    # Create keyboard with buttons in a single row, and skip button below
-    keyboard = [
-        buttons,
-        [InlineKeyboardButton("⏭️ Skip Card", callback_data=f"hl_skip_{game_id}")]
-    ]
+    # Row 3: Skip Card button only (no cashout on first card)
+    row3 = [apply_button_style(InlineKeyboardButton("⏭️ Skip Card", callback_data=f"hl_skip_{game_id}"), 'primary')]
+    
+    # Create keyboard with new layout
+    keyboard = [row1, row2, row3]
     
     # Build multiplier text
     mult_text = "Choose your prediction:\n"
@@ -6664,7 +6664,7 @@ async def highlow_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📊 Cards remaining: {len(deck)}\n\n"
         f"{mult_text}",
         parse_mode=ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=create_styled_keyboard(keyboard)
     )
 
 def get_card_name(card_value, with_emoji=True):
@@ -6729,19 +6729,21 @@ async def highlow_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         low_mult = calculate_highlow_multiplier(new_card, game["deck"], "low")
         tie_mult = calculate_highlow_multiplier(new_card, game["deck"], "tie")
         
-        # Build keyboard - conditionally show buttons based on card
-        buttons = []
+        # Build keyboard - row 1: Higher/Lower, row 2: Tie, row 3: Skip/Cashout
+        row1 = []
         if new_card != 13:
-            buttons.append(InlineKeyboardButton(f"⬆️ Higher ({high_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_high"))
+            row1.append(apply_button_style(InlineKeyboardButton(f"⬆️ Higher ({high_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_high"), 'primary'))
         if new_card != 1:
-            buttons.append(InlineKeyboardButton(f"⬇️ Lower ({low_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_low"))
-        buttons.append(InlineKeyboardButton(f"🔄 Tie ({tie_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_tie"))
+            row1.append(apply_button_style(InlineKeyboardButton(f"⬇️ Lower ({low_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_low"), 'success'))
         
-        keyboard = [
-            buttons,
-            [InlineKeyboardButton("⏭️ Skip Card", callback_data=f"hl_skip_{game_id}")],
-            [InlineKeyboardButton(f"💸 Cash Out (${win_amount:.2f})", callback_data=f"hl_cashout_{game_id}")]
+        row2 = [apply_button_style(InlineKeyboardButton(f"🔄 Tie ({tie_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_tie"), 'primary')]
+        
+        row3 = [
+            apply_button_style(InlineKeyboardButton("⏭️ Skip Card", callback_data=f"hl_skip_{game_id}"), 'primary'),
+            apply_button_style(InlineKeyboardButton(f"💸 Cash Out (${win_amount:.2f})", callback_data=f"hl_cashout_{game_id}"), 'success')
         ]
+        
+        keyboard = [row1, row2, row3]
         
         # Build multiplier text
         mult_text = "Next multipliers:\n"
@@ -6761,7 +6763,7 @@ async def highlow_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{mult_text}\n\n"
             f"Continue playing or cash out?\nID: <code>{game_id}</code>",
             parse_mode=ParseMode.HTML,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=create_styled_keyboard(keyboard)
         )
         return
     
@@ -6807,19 +6809,21 @@ async def highlow_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 low_mult = calculate_highlow_multiplier(next_card, game["deck"], "low")
                 tie_mult = calculate_highlow_multiplier(next_card, game["deck"], "tie")
                 
-                # Build keyboard - conditionally show buttons based on card
-                buttons = []
+                # Build keyboard - row 1: Higher/Lower, row 2: Tie, row 3: Skip/Cashout
+                row1 = []
                 if next_card != 13:
-                    buttons.append(InlineKeyboardButton(f"⬆️ Higher ({high_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_high"))
+                    row1.append(apply_button_style(InlineKeyboardButton(f"⬆️ Higher ({high_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_high"), 'primary'))
                 if next_card != 1:
-                    buttons.append(InlineKeyboardButton(f"⬇️ Lower ({low_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_low"))
-                buttons.append(InlineKeyboardButton(f"🔄 Tie ({tie_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_tie"))
+                    row1.append(apply_button_style(InlineKeyboardButton(f"⬇️ Lower ({low_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_low"), 'success'))
                 
-                keyboard = [
-                    buttons,
-                    [InlineKeyboardButton("⏭️ Skip Card", callback_data=f"hl_skip_{game_id}")],
-                    [InlineKeyboardButton(f"💸 Cash Out (${win_amount:.2f})", callback_data=f"hl_cashout_{game_id}")]
+                row2 = [apply_button_style(InlineKeyboardButton(f"🔄 Tie ({tie_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_tie"), 'primary')]
+                
+                row3 = [
+                    apply_button_style(InlineKeyboardButton("⏭️ Skip Card", callback_data=f"hl_skip_{game_id}"), 'primary'),
+                    apply_button_style(InlineKeyboardButton(f"💸 Cash Out (${win_amount:.2f})", callback_data=f"hl_cashout_{game_id}"), 'success')
                 ]
+                
+                keyboard = [row1, row2, row3]
                 
                 # Build multiplier text
                 mult_text = "Next multipliers:\n"
@@ -6839,7 +6843,7 @@ async def highlow_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"{mult_text}\n\n"
                     f"Continue playing or cash out?\nID: <code>{game_id}</code>",
                     parse_mode=ParseMode.HTML,
-                    reply_markup=InlineKeyboardMarkup(keyboard)
+                    reply_markup=create_styled_keyboard(keyboard)
                 )
             else:
                 # Wrong guess - game over
@@ -6997,18 +7001,17 @@ async def highlow_rebet_double_callback(update: Update, context: ContextTypes.DE
     low_mult = calculate_highlow_multiplier(current_card, deck, "low")
     tie_mult = calculate_highlow_multiplier(current_card, deck, "tie")
     
-    # Build keyboard
-    buttons = []
+    # Build keyboard - row 1: Higher/Lower, row 2: Tie, row 3: Skip
+    row1 = []
     if current_card != 13:
-        buttons.append(InlineKeyboardButton(f"⬆️ Higher ({high_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_high"))
+        row1.append(apply_button_style(InlineKeyboardButton(f"⬆️ Higher ({high_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_high"), 'primary'))
     if current_card != 1:
-        buttons.append(InlineKeyboardButton(f"⬇️ Lower ({low_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_low"))
-    buttons.append(InlineKeyboardButton(f"🔄 Tie ({tie_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_tie"))
+        row1.append(apply_button_style(InlineKeyboardButton(f"⬇️ Lower ({low_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_low"), 'success'))
     
-    keyboard = [
-        buttons,
-        [InlineKeyboardButton("⏭️ Skip Card", callback_data=f"hl_skip_{game_id}")]
-    ]
+    row2 = [apply_button_style(InlineKeyboardButton(f"🔄 Tie ({tie_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_tie"), 'primary')]
+    row3 = [apply_button_style(InlineKeyboardButton("⏭️ Skip Card", callback_data=f"hl_skip_{game_id}"), 'primary')]
+    
+    keyboard = [row1, row2, row3]
     
     # Build multiplier text
     mult_text = "Choose your prediction:\n"
@@ -7025,7 +7028,7 @@ async def highlow_rebet_double_callback(update: Update, context: ContextTypes.DE
         f"📊 Cards remaining: {len(deck)}\n\n"
         f"{mult_text}",
         parse_mode=ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=create_styled_keyboard(keyboard)
     )
 
 # 3. ROULETTE GAME
@@ -13285,9 +13288,15 @@ async def message_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         p1_rolls_text = " + ".join(str(r) for r in p1_rolls)
                         p2_rolls_text = " + ".join(str(r) for r in p2_rolls)
                         
+                        # Create mention links for players
+                        p1_username = match_data['usernames'][p1]
+                        p2_username = match_data['usernames'][p2]
+                        p1_mention = f'<a href="tg://user?id={p1}">@{p1_username}</a>'
+                        p2_mention = f'<a href="tg://user?id={p2}">@{p2_username}</a>'
+                        
                         text = f"<b>Round Results:</b>\n"
-                        text += f"{match_data['usernames'][p1]}: {p1_rolls_text} = <b>{p1_total}</b>\n"
-                        text += f"{match_data['usernames'][p2]}: {p2_rolls_text} = <b>{p2_total}</b>\n\n"
+                        text += f"{p1_mention}: {p1_rolls_text} = <b>{p1_total}</b>\n"
+                        text += f"{p2_mention}: {p2_rolls_text} = <b>{p2_total}</b>\n\n"
                         
                         winner_id, extra_info = None, ""
                         
@@ -13319,7 +13328,9 @@ async def message_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         if winner_id is not None:
                             try:
                                 match_data["points"][winner_id] += 1
-                                text += f"🎉 {match_data['usernames'][winner_id]} wins this round!"
+                                winner_username = match_data['usernames'][winner_id]
+                                winner_mention = f'<a href="tg://user?id={winner_id}">@{winner_username}</a>'
+                                text += f"🎉 {winner_mention} wins this round!"
                                 if DEBUG_EMOJI_GAMES:
                                     logging.info(f"POINTS_UPDATED: {match_data['points']}")
                             except KeyError as e:
@@ -13329,7 +13340,7 @@ async def message_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             text += extra_info
 
                         try:
-                            text += f"\n\n<b>Score:</b> {match_data['usernames'][p1]} {match_data['points'][p1]} - {match_data['points'][p2]} {match_data['usernames'][p2]}"
+                            text += f"\n\n<b>Score:</b> {p1_mention} {match_data['points'][p1]} - {match_data['points'][p2]} {p2_mention}"
                         except KeyError as e:
                             logging.error(f"KeyError displaying score: p1={p1}, p2={p2}, points_keys={list(match_data.get('points', {}).keys())}, usernames_keys={list(match_data.get('usernames', {}).keys())}, error={e}")
                             text += f"\n\n<b>Score:</b> Error displaying score"
@@ -13368,7 +13379,9 @@ async def message_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                     user_stats[loser_id]['game_sessions'] = []
                                 user_stats[loser_id]['game_sessions'].append(match_id)
                             
-                            text += f"\n\n🏆 <b>{match_data['usernames'][final_winner]} wins the match and earns ${winnings:.2f}!</b>"
+                            final_winner_username = match_data['usernames'][final_winner]
+                            final_winner_mention = f'<a href="tg://user?id={final_winner}">@{final_winner_username}</a>'
+                            text += f"\n\n🏆 <b>{final_winner_mention} wins the match and earns ${winnings:.2f}!</b>"
                             # Unpin the message
                             if 'pinned_message_id' in match_data:
                                 try: await context.bot.unpin_chat_message(chat_id, match_data['pinned_message_id'])
@@ -13376,7 +13389,7 @@ async def message_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         else:
                             match_data["last_roller"] = None
                             match_data["player_rolls"] = {p1: [], p2: []}  # Reset rolls for next round
-                            text += f"\n\n<b>Next round:</b> {match_data['usernames'][p1]} rolls first! ({allowed_emojis[gtype]} emoji)"
+                            text += f"\n\n<b>Next round:</b> {p1_mention} rolls first! ({allowed_emojis[gtype]} emoji)"
 
                         await asyncio.sleep(HELPER_BOT_ANIMATION_DELAY)
                         await context.bot.send_message(chat_id=chat_id, text=text, parse_mode=ParseMode.HTML)
@@ -14546,12 +14559,12 @@ async def continue_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         multiplier = 2 ** game["streak"]
         win_amount = game["bet_amount"] * multiplier
         keyboard = [
-            [InlineKeyboardButton("🪙 Heads", callback_data=f"flip_pick_{game_id}_Heads"),
-             InlineKeyboardButton("🪙 Tails", callback_data=f"flip_pick_{game_id}_Tails")],
+            [apply_button_style(InlineKeyboardButton("🪙 Heads", callback_data=f"flip_pick_{game_id}_Heads"), 'primary'),
+             apply_button_style(InlineKeyboardButton("🪙 Tails", callback_data=f"flip_pick_{game_id}_Tails"), 'primary')],
         ]
         if game['streak'] > 0:
-            keyboard.append([InlineKeyboardButton(f"💸 Cash Out (${win_amount:.2f})", callback_data=f"flip_cashout_{game_id}")])
-        await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard))
+            keyboard.append([apply_button_style(InlineKeyboardButton(f"💸 Cash Out (${win_amount:.2f})", callback_data=f"flip_cashout_{game_id}"), 'success')])
+        await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=create_styled_keyboard(keyboard))
     # FIX: Add blackjack continuation
     elif game_type == 'blackjack':
         text = f"🃏 Resuming Blackjack (ID: <code>{game_id}</code>)..."
