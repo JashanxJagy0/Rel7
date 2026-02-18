@@ -13363,12 +13363,14 @@ async def message_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     else:
                         other_id = [pid for pid in players if pid != user.id][0]
                         other_rolls = len(match_data["player_rolls"].get(other_id, []))
+                        # Safely get username with fallback
+                        other_username = match_data.get('usernames', {}).get(other_id, f"Player {other_id}")
                         if other_rolls == 0:
                             await asyncio.sleep(1)
-                            await update.message.reply_text(f"Your rolls complete! Waiting for {match_data['usernames'][other_id]} to start rolling.")
+                            await update.message.reply_text(f"Your rolls complete! Waiting for {other_username} to start rolling.")
                         elif other_rolls < game_rolls:
                             await asyncio.sleep(1)
-                            await update.message.reply_text(f"Your rolls complete! Waiting for {match_data['usernames'][other_id]} to finish ({other_rolls}/{game_rolls} done).")
+                            await update.message.reply_text(f"Your rolls complete! Waiting for {other_username} to finish ({other_rolls}/{game_rolls} done).")
                     return
         except Exception as e:
             logging.error(f"Error in PvP game handling: {e}", exc_info=True)
@@ -13785,6 +13787,15 @@ async def match_invite_callback(update: Update, context: ContextTypes.DEFAULT_TY
             match_data["player_rolls"] = {match_data["host_id"]: [], opponent_id: []}
         if "last_roller" not in match_data:
             match_data["last_roller"] = None
+        
+        # Ensure usernames are properly set for both players
+        if "usernames" not in match_data:
+            match_data["usernames"] = {}
+        # Update/ensure both player usernames are present
+        host_username = normalize_username(user_stats.get(match_data["host_id"], {}).get('userinfo', {}).get('username', '')) or f"ID{match_data['host_id']}"
+        opp_username = normalize_username(query.from_user.username) or normalize_username(user_stats.get(opponent_id, {}).get('userinfo', {}).get('username', '')) or f"ID{opponent_id}"
+        match_data["usernames"][match_data["host_id"]] = host_username
+        match_data["usernames"][opponent_id] = opp_username
         
         await ensure_user_in_wallets(match_data["host_id"], context=context)
         await ensure_user_in_wallets(opponent_id, context=context)
