@@ -6708,8 +6708,11 @@ async def highlow_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("No more cards to skip!", show_alert=True)
             return
         
-        # Draw new card
-        new_card = game["deck"].pop()
+        # Draw a random card from the remaining deck using provably fair RNG
+        deck_size = len(game["deck"])
+        nonce_for_draw = game["nonce"] + game["streak"] + 1000  # Offset to differentiate from pick draws
+        random_index = get_provably_fair_result(game["server_seed"], game["client_seed"], nonce_for_draw, deck_size)
+        new_card = game["deck"].pop(random_index)
         game["current_card"] = new_card
         
         card_name = get_card_name(new_card)
@@ -6764,7 +6767,12 @@ async def highlow_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Deck exhausted - auto cashout
             action = "cashout"
         else:
-            next_card = game["deck"].pop()
+            # Draw a random card from the remaining deck using provably fair RNG
+            # This ensures true probability distribution matching remaining cards
+            deck_size = len(game["deck"])
+            nonce_for_draw = game["nonce"] + game["streak"]  # Use streak to vary nonce
+            random_index = get_provably_fair_result(game["server_seed"], game["client_seed"], nonce_for_draw, deck_size)
+            next_card = game["deck"].pop(random_index)
             
             # Calculate the multiplier for this choice BEFORE the draw
             choice_multiplier = calculate_highlow_multiplier(current_card, game["deck"] + [next_card], choice)
@@ -8802,6 +8810,35 @@ async def slots_rebet_double_callback(update: Update, context: ContextTypes.DEFA
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
+# --- Helper function to check for ongoing emoji games ---
+def get_user_active_emoji_game(user_id: int):
+    """
+    Check if a user has any ongoing PvP or PvB emoji game.
+    Returns (game_id, game_type) if found, otherwise (None, None).
+    """
+    # Check for active PvB games
+    if user_id in active_pvb_games:
+        game_id = active_pvb_games[user_id]
+        if game_id in game_sessions and game_sessions[game_id].get('status') == 'active':
+            game_type = game_sessions[game_id].get('game_type', '')
+            return (game_id, game_type)
+    
+    # Check for active PvP games
+    for game_id, game_data in game_sessions.items():
+        if game_data.get('status') == 'active':
+            game_type = game_data.get('game_type', '')
+            # Check if it's an emoji game
+            if any(x in game_type for x in ['pvp_dice', 'pvp_darts', 'pvp_goal', 'pvp_bowl', 
+                                             'pvb_dice', 'pvb_darts', 'pvb_goal', 'pvb_bowl',
+                                             'group_challenge_', 'xdxw_']):
+                # Check if user is a player in this game
+                if 'players' in game_data and user_id in game_data['players']:
+                    return (game_id, game_type)
+                elif 'user_id' in game_data and game_data['user_id'] == user_id:
+                    return (game_id, game_type)
+    
+    return (None, None)
+
 # --- Play vs Bot Menu: Show inline buttons directly ---
 @check_banned
 @check_maintenance
@@ -8811,6 +8848,19 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_lang = get_user_lang(user.id)
     
     message_text = update.message.text.strip().split()
+    
+    # Check for ongoing game before starting a new one
+    if len(message_text) > 1:  # User wants to start a new game (not just opening menu)
+        ongoing_game_id, ongoing_game_type = get_user_active_emoji_game(user.id)
+        if ongoing_game_id:
+            # Extract readable game name from game_type
+            game_name = ongoing_game_type.replace('pvp_', '').replace('pvb_', '').replace('group_challenge_', '').replace('xdxw_', '').upper()
+            await update.message.reply_text(
+                f"⚠️ You already have an ongoing <b>{game_name}</b> match (ID: <code>{ongoing_game_id}</code>).\n\n"
+                f"Please complete it first before starting a new game!",
+                parse_mode=ParseMode.HTML
+            )
+            return
     
     # Check for XdX'w format: /dice amount XdX'w
     if len(message_text) == 3:
@@ -8852,6 +8902,19 @@ async def darts_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     message_text = update.message.text.strip().split()
     
+    # Check for ongoing game before starting a new one
+    if len(message_text) > 1:  # User wants to start a new game (not just opening menu)
+        ongoing_game_id, ongoing_game_type = get_user_active_emoji_game(user.id)
+        if ongoing_game_id:
+            # Extract readable game name from game_type
+            game_name = ongoing_game_type.replace('pvp_', '').replace('pvb_', '').replace('group_challenge_', '').replace('xdxw_', '').upper()
+            await update.message.reply_text(
+                f"⚠️ You already have an ongoing <b>{game_name}</b> match (ID: <code>{ongoing_game_id}</code>).\n\n"
+                f"Please complete it first before starting a new game!",
+                parse_mode=ParseMode.HTML
+            )
+            return
+    
     # Check for XdX'w format: /darts amount XdX'w
     if len(message_text) == 3:
         await create_xdxw_challenge(update, context, "darts")
@@ -8892,6 +8955,19 @@ async def football_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     message_text = update.message.text.strip().split()
     
+    # Check for ongoing game before starting a new one
+    if len(message_text) > 1:  # User wants to start a new game (not just opening menu)
+        ongoing_game_id, ongoing_game_type = get_user_active_emoji_game(user.id)
+        if ongoing_game_id:
+            # Extract readable game name from game_type
+            game_name = ongoing_game_type.replace('pvp_', '').replace('pvb_', '').replace('group_challenge_', '').replace('xdxw_', '').upper()
+            await update.message.reply_text(
+                f"⚠️ You already have an ongoing <b>{game_name}</b> match (ID: <code>{ongoing_game_id}</code>).\n\n"
+                f"Please complete it first before starting a new game!",
+                parse_mode=ParseMode.HTML
+            )
+            return
+    
     # Check for XdX'w format: /goal amount XdX'w
     if len(message_text) == 3:
         await create_xdxw_challenge(update, context, "goal")
@@ -8931,6 +9007,19 @@ async def bowling_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_lang = get_user_lang(user.id)
     
     message_text = update.message.text.strip().split()
+    
+    # Check for ongoing game before starting a new one
+    if len(message_text) > 1:  # User wants to start a new game (not just opening menu)
+        ongoing_game_id, ongoing_game_type = get_user_active_emoji_game(user.id)
+        if ongoing_game_id:
+            # Extract readable game name from game_type
+            game_name = ongoing_game_type.replace('pvp_', '').replace('pvb_', '').replace('group_challenge_', '').replace('xdxw_', '').upper()
+            await update.message.reply_text(
+                f"⚠️ You already have an ongoing <b>{game_name}</b> match (ID: <code>{ongoing_game_id}</code>).\n\n"
+                f"Please complete it first before starting a new game!",
+                parse_mode=ParseMode.HTML
+            )
+            return
     
     # Check for XdX'w format: /bowl amount XdX'w
     if len(message_text) == 3:
@@ -12294,6 +12383,17 @@ async def pvb_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await ensure_user_in_wallets(query.from_user.id, query.from_user.username, context=context)
 
     if data.startswith("pvb_start_"):
+        # Check for ongoing game before starting a new one
+        ongoing_game_id, ongoing_game_type = get_user_active_emoji_game(user.id)
+        if ongoing_game_id:
+            # Extract readable game name from game_type
+            game_name = ongoing_game_type.replace('pvp_', '').replace('pvb_', '').replace('group_challenge_', '').replace('xdxw_', '').upper()
+            await query.answer(
+                f"⚠️ You have an ongoing {game_name} match (ID: {ongoing_game_id}). Complete it first!",
+                show_alert=True
+            )
+            return
+        
         game_type = data.replace("pvb_start_", "")
         context.user_data['game_type'] = game_type
         
@@ -12871,15 +12971,44 @@ async def message_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 bot_total = sum(bot_rolls)
                 bot_rolls_text = " + ".join(str(r) for r in bot_rolls)
                 
-                # Show user's result
+                # Determine winner based on mode
+                win = False
+                if game_mode == "normal":
+                    # Normal mode: highest total wins
+                    win = user_total > bot_total
+                    tie = user_total == bot_total
+                else:
+                    # Crazy mode: lowest total wins
+                    win = user_total < bot_total
+                    tie = user_total == bot_total
+
+                round_result = {"user_rolls": user_rolls, "bot_rolls": bot_rolls, 
+                              "user_total": user_total, "bot_total": bot_total, "winner": None}
+                
+                if tie:
+                    result_text = "🤝 It's a tie! No point."
+                elif win:
+                    game["user_score"] += 1
+                    round_result["winner"] = "user"
+                    result_text = f"🎉 {user.first_name} wins this round!"
+                else:
+                    game["bot_score"] += 1
+                    round_result["winner"] = "bot"
+                    result_text = "🤖 Bot wins this round!"
+                
+                # Consolidated message for bot_rolls_first mode
+                username_display = user.first_name if user.first_name else "Player"
                 await update.message.reply_text(
-                    f"You rolled: {user_rolls_text} = <b>{user_total}</b>",
+                    f"{username_display} rolled: [{user_rolls_text}] = <b>{user_total}</b>\n"
+                    f"🤖 Rolled: [{bot_rolls_text}] = <b>{bot_total}</b>\n\n"
+                    f"{result_text}",
                     parse_mode=ParseMode.HTML
                 )
             else:
                 # Show user's result first
+                username_display = user.first_name if user.first_name else "Player"
                 await update.message.reply_text(
-                    f"You rolled: {user_rolls_text} = <b>{user_total}</b>\n\n"
+                    f"{username_display} rolled: [{user_rolls_text}] = <b>{user_total}</b>\n\n"
                     f"Bot is rolling...",
                     parse_mode=ParseMode.HTML
                 )
@@ -12913,42 +13042,35 @@ async def message_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 game["bot_rolls"] = bot_rolls
                 bot_total = sum(bot_rolls)
                 bot_rolls_text = " + ".join(str(r) for r in bot_rolls)
-            
-            # Determine winner based on mode
-            win = False
-            if game_mode == "normal":
-                # Normal mode: highest total wins
-                win = user_total > bot_total
-                tie = user_total == bot_total
-            else:
-                # Crazy mode: lowest total wins
-                win = user_total < bot_total
-                tie = user_total == bot_total
+                
+                # Determine winner based on mode
+                win = False
+                if game_mode == "normal":
+                    # Normal mode: highest total wins
+                    win = user_total > bot_total
+                    tie = user_total == bot_total
+                else:
+                    # Crazy mode: lowest total wins
+                    win = user_total < bot_total
+                    tie = user_total == bot_total
 
-            round_result = {"user_rolls": user_rolls, "bot_rolls": bot_rolls, 
-                          "user_total": user_total, "bot_total": bot_total, "winner": None}
-            
-            if tie:
-                result_text = "It's a tie! No point."
-            elif win:
-                game["user_score"] += 1
-                round_result["winner"] = "user"
-                result_text = "You win this round!"
-            else:
-                game["bot_score"] += 1
-                round_result["winner"] = "bot"
-                result_text = "Bot wins this round!"
-            
-            if not bot_rolls_first:
-                # Only show bot result message if bot rolled after user
+                round_result = {"user_rolls": user_rolls, "bot_rolls": bot_rolls, 
+                              "user_total": user_total, "bot_total": bot_total, "winner": None}
+                
+                if tie:
+                    result_text = "🤝 It's a tie! No point."
+                elif win:
+                    game["user_score"] += 1
+                    round_result["winner"] = "user"
+                    result_text = f"🎉 {username_display} wins this round!"
+                else:
+                    game["bot_score"] += 1
+                    round_result["winner"] = "bot"
+                    result_text = "🤖 Bot wins this round!"
+                
+                # Consolidated message showing bot rolls and winner
                 await update.message.reply_text(
-                    f"Bot rolled: {bot_rolls_text} = <b>{bot_total}</b>\n\n{result_text}",
-                    parse_mode=ParseMode.HTML
-                )
-            else:
-                # For bot_rolls_first, show comparison result
-                await update.message.reply_text(
-                    f"Bot had: {bot_rolls_text} = <b>{bot_total}</b>\n\n{result_text}",
+                    f"🤖 Rolled: [{bot_rolls_text}] = <b>{bot_total}</b>\n\n{result_text}",
                     parse_mode=ParseMode.HTML
                 )
 
@@ -13016,11 +13138,13 @@ async def message_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     
                     game["bot_rolls"] = bot_rolls
                     bot_total = sum(bot_rolls)
-                    bot_rolls_text = " + ".join(str(r) for r in bot_rolls)
+                    bot_rolls_text = ", ".join(str(r) for r in bot_rolls)
                     
+                    username_display = user.first_name if user.first_name else "Player"
                     await update.message.reply_text(
-                        f"🤖 Bot rolled: {bot_rolls_text} = <b>{bot_total}</b>\n\n"
-                        f"<b>Your turn!</b> Send {game_rolls} {expected_emoji}!",
+                        f"🤖 <b>BOT ROLLED FIRST!</b>\n\n"
+                        f"Bot rolled: [{bot_rolls_text}] = {bot_total}\n\n"
+                        f"{username_display}, Your turn! Send {game_rolls} {expected_emoji} to respond.",
                         parse_mode=ParseMode.HTML
                     )
                 else:
@@ -17973,14 +18097,16 @@ async def play_vs_bot_game_from_callback(query, context: ContextTypes.DEFAULT_TY
         
         game_sessions[game_id]["bot_rolls"] = bot_rolls
         bot_total = sum(bot_rolls)
-        bot_rolls_text = " + ".join(str(r) for r in bot_rolls)
+        bot_rolls_text = ", ".join(str(r) for r in bot_rolls)
         
         game_sessions[game_id]["waiting_for"] = "user"
         
+        username_display = user.first_name if user.first_name else "Player"
         await context.bot.send_message(
             chat_id=chat_id,
-            text=f"🤖 Bot rolled: {bot_rolls_text} = <b>{bot_total}</b>\n\n"
-                 f"<b>Your turn!</b> Send {game_rolls} {emoji} emoji{'s' if game_rolls > 1 else ''} to respond.",
+            text=f"🤖 <b>BOT ROLLED FIRST!</b>\n\n"
+                 f"Bot rolled: [{bot_rolls_text}] = {bot_total}\n\n"
+                 f"{username_display}, Your turn! Send {game_rolls} {emoji} to respond.",
             parse_mode=ParseMode.HTML
         )
     else:
