@@ -80,6 +80,12 @@ BOT_OWNER_ID = 6083286836
 MIN_BALANCE = 0.1
 DEBUG_EMOJI_GAMES = False  # Set to True to enable detailed emoji game logging
 
+# Roll display separator for emoji games
+ROLL_SEPARATOR = ", "  # Separator for displaying multiple roll values (e.g., "4, 5, 6")
+
+# HiLow nonce offset for skip actions (to differentiate from pick draws)
+HILOW_SKIP_NONCE_OFFSET = 1000
+
 # Helper bot animation timing (faster than main bot)
 HELPER_BOT_ANIMATION_DELAY = 0.3  # Seconds to wait after helper bot sends animation (dice, slots, darts, etc.)
 
@@ -6280,14 +6286,14 @@ async def coin_flip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
     keyboard = [
-        [InlineKeyboardButton("🪙 Heads", callback_data=f"flip_pick_{game_id}_Heads"),
-         InlineKeyboardButton("🪙 Tails", callback_data=f"flip_pick_{game_id}_Tails")]
+        [apply_button_style(InlineKeyboardButton("🪙 Heads", callback_data=f"flip_pick_{game_id}_Heads"), 'primary'),
+         apply_button_style(InlineKeyboardButton("🪙 Tails", callback_data=f"flip_pick_{game_id}_Tails"), 'primary')]
     ]
     await update.message.reply_text(
         f"🪙 <b>Coin Flip Started!</b> (ID: <code>{game_id}</code>)\n\n💰 Bet: ${bet:.2f}\nChoose Heads or Tails!\n\n"
         f"🎯 Current Multiplier: 1.94x",
         parse_mode=ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=create_styled_keyboard(keyboard)
     )
 
 @check_banned
@@ -6329,16 +6335,16 @@ async def coin_flip_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             win_amount = game["bet_amount"] * multiplier
             next_multiplier = 1.94 * (2 ** game["streak"])
             keyboard = [
-                [InlineKeyboardButton("🪙 Heads", callback_data=f"flip_pick_{game_id}_Heads"),
-                 InlineKeyboardButton("🪙 Tails", callback_data=f"flip_pick_{game_id}_Tails")],
-                [InlineKeyboardButton(f"💸 Cash Out (${win_amount:.2f})", callback_data=f"flip_cashout_{game_id}")]
+                [apply_button_style(InlineKeyboardButton("🪙 Heads", callback_data=f"flip_pick_{game_id}_Heads"), 'primary'),
+                 apply_button_style(InlineKeyboardButton("🪙 Tails", callback_data=f"flip_pick_{game_id}_Tails"), 'primary')],
+                [apply_button_style(InlineKeyboardButton(f"💸 Cash Out (${win_amount:.2f})", callback_data=f"flip_cashout_{game_id}"), 'success')]
             ]
             await query.edit_message_text(
                 f"🎉 <b>Correct!</b> The coin landed on {pick}!\n\n"
                 f"💰 Current Win: <b>${win_amount:.2f}</b>\n🔥 Streak: {game['streak']}\n"
                 f"🎯 Next Multiplier: {next_multiplier:.2f}x\n\nContinue playing or cash out?\nID: <code>{game_id}</code>",
                 parse_mode=ParseMode.HTML,
-                reply_markup=InlineKeyboardMarkup(keyboard)
+                reply_markup=create_styled_keyboard(keyboard)
             )
         else:
             game["status"] = 'completed'
@@ -6476,14 +6482,14 @@ async def coinflip_rebet_double_callback(update: Update, context: ContextTypes.D
     save_user_data(user.id)
 
     keyboard = [
-        [InlineKeyboardButton("🪙 Heads", callback_data=f"flip_pick_{game_id}_Heads"),
-         InlineKeyboardButton("🪙 Tails", callback_data=f"flip_pick_{game_id}_Tails")]
+        [apply_button_style(InlineKeyboardButton("🪙 Heads", callback_data=f"flip_pick_{game_id}_Heads"), 'primary'),
+         apply_button_style(InlineKeyboardButton("🪙 Tails", callback_data=f"flip_pick_{game_id}_Tails"), 'primary')]
     ]
     await query.edit_message_text(
         f"🪙 <b>Coin Flip Started!</b> (ID: <code>{game_id}</code>)\n\n💰 Bet: ${bet:.2f}\nChoose Heads or Tails!\n\n"
         f"🎯 Current Multiplier: 1.94x",
         parse_mode=ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=create_styled_keyboard(keyboard)
     )
 
 # 2B. HIGH-LOW CARD GAME
@@ -6623,25 +6629,25 @@ async def highlow_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     low_mult = calculate_highlow_multiplier(current_card, deck, "low")
     tie_mult = calculate_highlow_multiplier(current_card, deck, "tie")
     
-    # Build keyboard - conditionally show buttons based on card
-    buttons = []
+    # Build keyboard - row 1: Higher/Lower, row 2: Tie, row 3: Skip/Cashout
+    row1 = []
     
     # Add Higher button only if not King (13)
     if current_card != 13:
-        buttons.append(InlineKeyboardButton(f"⬆️ Higher ({high_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_high"))
+        row1.append(apply_button_style(InlineKeyboardButton(f"⬆️ Higher ({high_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_high"), 'primary'))
     
     # Add Lower button only if not Ace (1)
     if current_card != 1:
-        buttons.append(InlineKeyboardButton(f"⬇️ Lower ({low_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_low"))
+        row1.append(apply_button_style(InlineKeyboardButton(f"⬇️ Lower ({low_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_low"), 'success'))
     
-    # Always add Tie button
-    buttons.append(InlineKeyboardButton(f"🔄 Tie ({tie_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_tie"))
+    # Row 2: Tie button
+    row2 = [apply_button_style(InlineKeyboardButton(f"🔄 Tie ({tie_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_tie"), 'primary')]
     
-    # Create keyboard with buttons in a single row, and skip button below
-    keyboard = [
-        buttons,
-        [InlineKeyboardButton("⏭️ Skip Card", callback_data=f"hl_skip_{game_id}")]
-    ]
+    # Row 3: Skip Card button only (no cashout on first card)
+    row3 = [apply_button_style(InlineKeyboardButton("⏭️ Skip Card", callback_data=f"hl_skip_{game_id}"), 'primary')]
+    
+    # Create keyboard with new layout
+    keyboard = [row1, row2, row3]
     
     # Build multiplier text
     mult_text = "Choose your prediction:\n"
@@ -6658,7 +6664,7 @@ async def highlow_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📊 Cards remaining: {len(deck)}\n\n"
         f"{mult_text}",
         parse_mode=ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=create_styled_keyboard(keyboard)
     )
 
 def get_card_name(card_value, with_emoji=True):
@@ -6708,8 +6714,11 @@ async def highlow_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("No more cards to skip!", show_alert=True)
             return
         
-        # Draw new card
-        new_card = game["deck"].pop()
+        # Draw a random card from the remaining deck using provably fair RNG
+        deck_size = len(game["deck"])
+        nonce_for_draw = game["nonce"] + game["streak"] + HILOW_SKIP_NONCE_OFFSET  # Offset to differentiate from pick draws
+        random_index = get_provably_fair_result(game["server_seed"], game["client_seed"], nonce_for_draw, deck_size)
+        new_card = game["deck"].pop(random_index)
         game["current_card"] = new_card
         
         card_name = get_card_name(new_card)
@@ -6720,19 +6729,21 @@ async def highlow_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         low_mult = calculate_highlow_multiplier(new_card, game["deck"], "low")
         tie_mult = calculate_highlow_multiplier(new_card, game["deck"], "tie")
         
-        # Build keyboard - conditionally show buttons based on card
-        buttons = []
+        # Build keyboard - row 1: Higher/Lower, row 2: Tie, row 3: Skip/Cashout
+        row1 = []
         if new_card != 13:
-            buttons.append(InlineKeyboardButton(f"⬆️ Higher ({high_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_high"))
+            row1.append(apply_button_style(InlineKeyboardButton(f"⬆️ Higher ({high_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_high"), 'primary'))
         if new_card != 1:
-            buttons.append(InlineKeyboardButton(f"⬇️ Lower ({low_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_low"))
-        buttons.append(InlineKeyboardButton(f"🔄 Tie ({tie_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_tie"))
+            row1.append(apply_button_style(InlineKeyboardButton(f"⬇️ Lower ({low_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_low"), 'success'))
         
-        keyboard = [
-            buttons,
-            [InlineKeyboardButton("⏭️ Skip Card", callback_data=f"hl_skip_{game_id}")],
-            [InlineKeyboardButton(f"💸 Cash Out (${win_amount:.2f})", callback_data=f"hl_cashout_{game_id}")]
+        row2 = [apply_button_style(InlineKeyboardButton(f"🔄 Tie ({tie_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_tie"), 'primary')]
+        
+        row3 = [
+            apply_button_style(InlineKeyboardButton("⏭️ Skip Card", callback_data=f"hl_skip_{game_id}"), 'primary'),
+            apply_button_style(InlineKeyboardButton(f"💸 Cash Out (${win_amount:.2f})", callback_data=f"hl_cashout_{game_id}"), 'success')
         ]
+        
+        keyboard = [row1, row2, row3]
         
         # Build multiplier text
         mult_text = "Next multipliers:\n"
@@ -6752,7 +6763,7 @@ async def highlow_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{mult_text}\n\n"
             f"Continue playing or cash out?\nID: <code>{game_id}</code>",
             parse_mode=ParseMode.HTML,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=create_styled_keyboard(keyboard)
         )
         return
     
@@ -6764,7 +6775,12 @@ async def highlow_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Deck exhausted - auto cashout
             action = "cashout"
         else:
-            next_card = game["deck"].pop()
+            # Draw a random card from the remaining deck using provably fair RNG
+            # This ensures true probability distribution matching remaining cards
+            deck_size = len(game["deck"])
+            nonce_for_draw = game["nonce"] + game["streak"]  # Use streak to vary nonce
+            random_index = get_provably_fair_result(game["server_seed"], game["client_seed"], nonce_for_draw, deck_size)
+            next_card = game["deck"].pop(random_index)
             
             # Calculate the multiplier for this choice BEFORE the draw
             choice_multiplier = calculate_highlow_multiplier(current_card, game["deck"] + [next_card], choice)
@@ -6793,19 +6809,21 @@ async def highlow_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 low_mult = calculate_highlow_multiplier(next_card, game["deck"], "low")
                 tie_mult = calculate_highlow_multiplier(next_card, game["deck"], "tie")
                 
-                # Build keyboard - conditionally show buttons based on card
-                buttons = []
+                # Build keyboard - row 1: Higher/Lower, row 2: Tie, row 3: Skip/Cashout
+                row1 = []
                 if next_card != 13:
-                    buttons.append(InlineKeyboardButton(f"⬆️ Higher ({high_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_high"))
+                    row1.append(apply_button_style(InlineKeyboardButton(f"⬆️ Higher ({high_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_high"), 'primary'))
                 if next_card != 1:
-                    buttons.append(InlineKeyboardButton(f"⬇️ Lower ({low_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_low"))
-                buttons.append(InlineKeyboardButton(f"🔄 Tie ({tie_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_tie"))
+                    row1.append(apply_button_style(InlineKeyboardButton(f"⬇️ Lower ({low_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_low"), 'success'))
                 
-                keyboard = [
-                    buttons,
-                    [InlineKeyboardButton("⏭️ Skip Card", callback_data=f"hl_skip_{game_id}")],
-                    [InlineKeyboardButton(f"💸 Cash Out (${win_amount:.2f})", callback_data=f"hl_cashout_{game_id}")]
+                row2 = [apply_button_style(InlineKeyboardButton(f"🔄 Tie ({tie_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_tie"), 'primary')]
+                
+                row3 = [
+                    apply_button_style(InlineKeyboardButton("⏭️ Skip Card", callback_data=f"hl_skip_{game_id}"), 'primary'),
+                    apply_button_style(InlineKeyboardButton(f"💸 Cash Out (${win_amount:.2f})", callback_data=f"hl_cashout_{game_id}"), 'success')
                 ]
+                
+                keyboard = [row1, row2, row3]
                 
                 # Build multiplier text
                 mult_text = "Next multipliers:\n"
@@ -6825,7 +6843,7 @@ async def highlow_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"{mult_text}\n\n"
                     f"Continue playing or cash out?\nID: <code>{game_id}</code>",
                     parse_mode=ParseMode.HTML,
-                    reply_markup=InlineKeyboardMarkup(keyboard)
+                    reply_markup=create_styled_keyboard(keyboard)
                 )
             else:
                 # Wrong guess - game over
@@ -6983,18 +7001,17 @@ async def highlow_rebet_double_callback(update: Update, context: ContextTypes.DE
     low_mult = calculate_highlow_multiplier(current_card, deck, "low")
     tie_mult = calculate_highlow_multiplier(current_card, deck, "tie")
     
-    # Build keyboard
-    buttons = []
+    # Build keyboard - row 1: Higher/Lower, row 2: Tie, row 3: Skip
+    row1 = []
     if current_card != 13:
-        buttons.append(InlineKeyboardButton(f"⬆️ Higher ({high_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_high"))
+        row1.append(apply_button_style(InlineKeyboardButton(f"⬆️ Higher ({high_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_high"), 'primary'))
     if current_card != 1:
-        buttons.append(InlineKeyboardButton(f"⬇️ Lower ({low_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_low"))
-    buttons.append(InlineKeyboardButton(f"🔄 Tie ({tie_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_tie"))
+        row1.append(apply_button_style(InlineKeyboardButton(f"⬇️ Lower ({low_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_low"), 'success'))
     
-    keyboard = [
-        buttons,
-        [InlineKeyboardButton("⏭️ Skip Card", callback_data=f"hl_skip_{game_id}")]
-    ]
+    row2 = [apply_button_style(InlineKeyboardButton(f"🔄 Tie ({tie_mult:.2f}x)", callback_data=f"hl_pick_{game_id}_tie"), 'primary')]
+    row3 = [apply_button_style(InlineKeyboardButton("⏭️ Skip Card", callback_data=f"hl_skip_{game_id}"), 'primary')]
+    
+    keyboard = [row1, row2, row3]
     
     # Build multiplier text
     mult_text = "Choose your prediction:\n"
@@ -7011,7 +7028,7 @@ async def highlow_rebet_double_callback(update: Update, context: ContextTypes.DE
         f"📊 Cards remaining: {len(deck)}\n\n"
         f"{mult_text}",
         parse_mode=ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=create_styled_keyboard(keyboard)
     )
 
 # 3. ROULETTE GAME
@@ -8802,6 +8819,54 @@ async def slots_rebet_double_callback(update: Update, context: ContextTypes.DEFA
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
+def extract_game_name(game_type: str) -> str:
+    """Extract readable game name from game_type string.
+    
+    Args:
+        game_type: The internal game type identifier (e.g., 'pvp_dice', 'pvb_bowl', 'group_challenge_darts')
+        
+    Returns:
+        The human-readable game name in uppercase (e.g., 'DICE', 'BOWL', 'DARTS')
+    """
+    return game_type.replace('pvp_', '').replace('pvb_', '').replace('group_challenge_', '').replace('xdxw_', '').upper()
+
+# --- Helper function to check for ongoing emoji games ---
+def get_user_active_emoji_game(user_id: int):
+    """Check if a user has any ongoing PvP or PvB emoji game.
+    
+    Args:
+        user_id: The Telegram user ID to check
+        
+    Returns:
+        A tuple of (game_id: str, game_type: str) if an active game exists, otherwise (None, None)
+    """
+    """
+    Check if a user has any ongoing PvP or PvB emoji game.
+    Returns (game_id, game_type) if found, otherwise (None, None).
+    """
+    # Check for active PvB games
+    if user_id in active_pvb_games:
+        game_id = active_pvb_games[user_id]
+        if game_id in game_sessions and game_sessions[game_id].get('status') == 'active':
+            game_type = game_sessions[game_id].get('game_type', '')
+            return (game_id, game_type)
+    
+    # Check for active PvP games
+    for game_id, game_data in game_sessions.items():
+        if game_data.get('status') == 'active':
+            game_type = game_data.get('game_type', '')
+            # Check if it's an emoji game
+            if any(x in game_type for x in ['pvp_dice', 'pvp_darts', 'pvp_goal', 'pvp_bowl', 
+                                             'pvb_dice', 'pvb_darts', 'pvb_goal', 'pvb_bowl',
+                                             'group_challenge_', 'xdxw_']):
+                # Check if user is a player in this game
+                if 'players' in game_data and user_id in game_data['players']:
+                    return (game_id, game_type)
+                elif 'user_id' in game_data and game_data['user_id'] == user_id:
+                    return (game_id, game_type)
+    
+    return (None, None)
+
 # --- Play vs Bot Menu: Show inline buttons directly ---
 @check_banned
 @check_maintenance
@@ -8811,6 +8876,18 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_lang = get_user_lang(user.id)
     
     message_text = update.message.text.strip().split()
+    
+    # Check for ongoing game before starting a new one
+    if len(message_text) > 1:  # User wants to start a new game (not just opening menu)
+        ongoing_game_id, ongoing_game_type = get_user_active_emoji_game(user.id)
+        if ongoing_game_id:
+            game_name = extract_game_name(ongoing_game_type)
+            await update.message.reply_text(
+                f"⚠️ You already have an ongoing <b>{game_name}</b> match (ID: <code>{ongoing_game_id}</code>).\n\n"
+                f"Please complete it first before starting a new game!",
+                parse_mode=ParseMode.HTML
+            )
+            return
     
     # Check for XdX'w format: /dice amount XdX'w
     if len(message_text) == 3:
@@ -8852,6 +8929,18 @@ async def darts_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     message_text = update.message.text.strip().split()
     
+    # Check for ongoing game before starting a new one
+    if len(message_text) > 1:  # User wants to start a new game (not just opening menu)
+        ongoing_game_id, ongoing_game_type = get_user_active_emoji_game(user.id)
+        if ongoing_game_id:
+            game_name = extract_game_name(ongoing_game_type)
+            await update.message.reply_text(
+                f"⚠️ You already have an ongoing <b>{game_name}</b> match (ID: <code>{ongoing_game_id}</code>).\n\n"
+                f"Please complete it first before starting a new game!",
+                parse_mode=ParseMode.HTML
+            )
+            return
+    
     # Check for XdX'w format: /darts amount XdX'w
     if len(message_text) == 3:
         await create_xdxw_challenge(update, context, "darts")
@@ -8892,6 +8981,18 @@ async def football_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     message_text = update.message.text.strip().split()
     
+    # Check for ongoing game before starting a new one
+    if len(message_text) > 1:  # User wants to start a new game (not just opening menu)
+        ongoing_game_id, ongoing_game_type = get_user_active_emoji_game(user.id)
+        if ongoing_game_id:
+            game_name = extract_game_name(ongoing_game_type)
+            await update.message.reply_text(
+                f"⚠️ You already have an ongoing <b>{game_name}</b> match (ID: <code>{ongoing_game_id}</code>).\n\n"
+                f"Please complete it first before starting a new game!",
+                parse_mode=ParseMode.HTML
+            )
+            return
+    
     # Check for XdX'w format: /goal amount XdX'w
     if len(message_text) == 3:
         await create_xdxw_challenge(update, context, "goal")
@@ -8931,6 +9032,18 @@ async def bowling_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_lang = get_user_lang(user.id)
     
     message_text = update.message.text.strip().split()
+    
+    # Check for ongoing game before starting a new one
+    if len(message_text) > 1:  # User wants to start a new game (not just opening menu)
+        ongoing_game_id, ongoing_game_type = get_user_active_emoji_game(user.id)
+        if ongoing_game_id:
+            game_name = extract_game_name(ongoing_game_type)
+            await update.message.reply_text(
+                f"⚠️ You already have an ongoing <b>{game_name}</b> match (ID: <code>{ongoing_game_id}</code>).\n\n"
+                f"Please complete it first before starting a new game!",
+                parse_mode=ParseMode.HTML
+            )
+            return
     
     # Check for XdX'w format: /bowl amount XdX'w
     if len(message_text) == 3:
@@ -12294,6 +12407,16 @@ async def pvb_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await ensure_user_in_wallets(query.from_user.id, query.from_user.username, context=context)
 
     if data.startswith("pvb_start_"):
+        # Check for ongoing game before starting a new one
+        ongoing_game_id, ongoing_game_type = get_user_active_emoji_game(user.id)
+        if ongoing_game_id:
+            game_name = extract_game_name(ongoing_game_type)
+            await query.answer(
+                f"⚠️ You have an ongoing {game_name} match (ID: {ongoing_game_id}). Complete it first!",
+                show_alert=True
+            )
+            return
+        
         game_type = data.replace("pvb_start_", "")
         context.user_data['game_type'] = game_type
         
@@ -12863,23 +12986,52 @@ async def message_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # User finished rolling
             user_rolls = game['user_rolls']
             user_total = sum(user_rolls)
-            user_rolls_text = " + ".join(str(r) for r in user_rolls)
+            user_rolls_text = ROLL_SEPARATOR.join(str(r) for r in user_rolls)
             
             if bot_rolls_first:
                 # Bot already rolled, so we have bot_rolls
                 bot_rolls = game.get('bot_rolls', [])
                 bot_total = sum(bot_rolls)
-                bot_rolls_text = " + ".join(str(r) for r in bot_rolls)
+                bot_rolls_text = ROLL_SEPARATOR.join(str(r) for r in bot_rolls)
                 
-                # Show user's result
+                # Determine winner based on mode
+                win = False
+                if game_mode == "normal":
+                    # Normal mode: highest total wins
+                    win = user_total > bot_total
+                    tie = user_total == bot_total
+                else:
+                    # Crazy mode: lowest total wins
+                    win = user_total < bot_total
+                    tie = user_total == bot_total
+
+                round_result = {"user_rolls": user_rolls, "bot_rolls": bot_rolls, 
+                              "user_total": user_total, "bot_total": bot_total, "winner": None}
+                
+                if tie:
+                    result_text = "🤝 It's a tie! No point."
+                elif win:
+                    game["user_score"] += 1
+                    round_result["winner"] = "user"
+                    result_text = f"🎉 {user.first_name} wins this round!"
+                else:
+                    game["bot_score"] += 1
+                    round_result["winner"] = "bot"
+                    result_text = "🤖 Bot wins this round!"
+                
+                # Consolidated message for bot_rolls_first mode
+                username_display = user.first_name if user.first_name else "Player"
                 await update.message.reply_text(
-                    f"You rolled: {user_rolls_text} = <b>{user_total}</b>",
+                    f"{username_display} rolled: [{user_rolls_text}] = <b>{user_total}</b>\n"
+                    f"🤖 Rolled: [{bot_rolls_text}] = <b>{bot_total}</b>\n\n"
+                    f"{result_text}",
                     parse_mode=ParseMode.HTML
                 )
             else:
                 # Show user's result first
+                username_display = user.first_name if user.first_name else "Player"
                 await update.message.reply_text(
-                    f"You rolled: {user_rolls_text} = <b>{user_total}</b>\n\n"
+                    f"{username_display} rolled: [{user_rolls_text}] = <b>{user_total}</b>\n\n"
                     f"Bot is rolling...",
                     parse_mode=ParseMode.HTML
                 )
@@ -12912,43 +13064,36 @@ async def message_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 game["bot_rolls"] = bot_rolls
                 bot_total = sum(bot_rolls)
-                bot_rolls_text = " + ".join(str(r) for r in bot_rolls)
-            
-            # Determine winner based on mode
-            win = False
-            if game_mode == "normal":
-                # Normal mode: highest total wins
-                win = user_total > bot_total
-                tie = user_total == bot_total
-            else:
-                # Crazy mode: lowest total wins
-                win = user_total < bot_total
-                tie = user_total == bot_total
+                bot_rolls_text = ROLL_SEPARATOR.join(str(r) for r in bot_rolls)
+                
+                # Determine winner based on mode
+                win = False
+                if game_mode == "normal":
+                    # Normal mode: highest total wins
+                    win = user_total > bot_total
+                    tie = user_total == bot_total
+                else:
+                    # Crazy mode: lowest total wins
+                    win = user_total < bot_total
+                    tie = user_total == bot_total
 
-            round_result = {"user_rolls": user_rolls, "bot_rolls": bot_rolls, 
-                          "user_total": user_total, "bot_total": bot_total, "winner": None}
-            
-            if tie:
-                result_text = "It's a tie! No point."
-            elif win:
-                game["user_score"] += 1
-                round_result["winner"] = "user"
-                result_text = "You win this round!"
-            else:
-                game["bot_score"] += 1
-                round_result["winner"] = "bot"
-                result_text = "Bot wins this round!"
-            
-            if not bot_rolls_first:
-                # Only show bot result message if bot rolled after user
+                round_result = {"user_rolls": user_rolls, "bot_rolls": bot_rolls, 
+                              "user_total": user_total, "bot_total": bot_total, "winner": None}
+                
+                if tie:
+                    result_text = "🤝 It's a tie! No point."
+                elif win:
+                    game["user_score"] += 1
+                    round_result["winner"] = "user"
+                    result_text = f"🎉 {username_display} wins this round!"
+                else:
+                    game["bot_score"] += 1
+                    round_result["winner"] = "bot"
+                    result_text = "🤖 Bot wins this round!"
+                
+                # Consolidated message showing bot rolls and winner
                 await update.message.reply_text(
-                    f"Bot rolled: {bot_rolls_text} = <b>{bot_total}</b>\n\n{result_text}",
-                    parse_mode=ParseMode.HTML
-                )
-            else:
-                # For bot_rolls_first, show comparison result
-                await update.message.reply_text(
-                    f"Bot had: {bot_rolls_text} = <b>{bot_total}</b>\n\n{result_text}",
+                    f"🤖 Rolled: [{bot_rolls_text}] = <b>{bot_total}</b>\n\n{result_text}",
                     parse_mode=ParseMode.HTML
                 )
 
@@ -13016,11 +13161,13 @@ async def message_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     
                     game["bot_rolls"] = bot_rolls
                     bot_total = sum(bot_rolls)
-                    bot_rolls_text = " + ".join(str(r) for r in bot_rolls)
+                    bot_rolls_text = ROLL_SEPARATOR.join(str(r) for r in bot_rolls)
                     
+                    username_display = user.first_name if user.first_name else "Player"
                     await update.message.reply_text(
-                        f"🤖 Bot rolled: {bot_rolls_text} = <b>{bot_total}</b>\n\n"
-                        f"<b>Your turn!</b> Send {game_rolls} {expected_emoji}!",
+                        f"🤖 <b>BOT ROLLED FIRST!</b>\n\n"
+                        f"Bot rolled: [{bot_rolls_text}] = {bot_total}\n\n"
+                        f"{username_display}, Your turn! Send {game_rolls} {expected_emoji} to respond.",
                         parse_mode=ParseMode.HTML
                     )
                 else:
@@ -13141,9 +13288,15 @@ async def message_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         p1_rolls_text = " + ".join(str(r) for r in p1_rolls)
                         p2_rolls_text = " + ".join(str(r) for r in p2_rolls)
                         
+                        # Create mention links for players
+                        p1_username = match_data['usernames'][p1]
+                        p2_username = match_data['usernames'][p2]
+                        p1_mention = f'<a href="tg://user?id={p1}">@{p1_username}</a>'
+                        p2_mention = f'<a href="tg://user?id={p2}">@{p2_username}</a>'
+                        
                         text = f"<b>Round Results:</b>\n"
-                        text += f"{match_data['usernames'][p1]}: {p1_rolls_text} = <b>{p1_total}</b>\n"
-                        text += f"{match_data['usernames'][p2]}: {p2_rolls_text} = <b>{p2_total}</b>\n\n"
+                        text += f"{p1_mention}: {p1_rolls_text} = <b>{p1_total}</b>\n"
+                        text += f"{p2_mention}: {p2_rolls_text} = <b>{p2_total}</b>\n\n"
                         
                         winner_id, extra_info = None, ""
                         
@@ -13175,7 +13328,9 @@ async def message_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         if winner_id is not None:
                             try:
                                 match_data["points"][winner_id] += 1
-                                text += f"🎉 {match_data['usernames'][winner_id]} wins this round!"
+                                winner_username = match_data['usernames'][winner_id]
+                                winner_mention = f'<a href="tg://user?id={winner_id}">@{winner_username}</a>'
+                                text += f"🎉 {winner_mention} wins this round!"
                                 if DEBUG_EMOJI_GAMES:
                                     logging.info(f"POINTS_UPDATED: {match_data['points']}")
                             except KeyError as e:
@@ -13185,7 +13340,7 @@ async def message_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             text += extra_info
 
                         try:
-                            text += f"\n\n<b>Score:</b> {match_data['usernames'][p1]} {match_data['points'][p1]} - {match_data['points'][p2]} {match_data['usernames'][p2]}"
+                            text += f"\n\n<b>Score:</b> {p1_mention} {match_data['points'][p1]} - {match_data['points'][p2]} {p2_mention}"
                         except KeyError as e:
                             logging.error(f"KeyError displaying score: p1={p1}, p2={p2}, points_keys={list(match_data.get('points', {}).keys())}, usernames_keys={list(match_data.get('usernames', {}).keys())}, error={e}")
                             text += f"\n\n<b>Score:</b> Error displaying score"
@@ -13224,7 +13379,9 @@ async def message_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                     user_stats[loser_id]['game_sessions'] = []
                                 user_stats[loser_id]['game_sessions'].append(match_id)
                             
-                            text += f"\n\n🏆 <b>{match_data['usernames'][final_winner]} wins the match and earns ${winnings:.2f}!</b>"
+                            final_winner_username = match_data['usernames'][final_winner]
+                            final_winner_mention = f'<a href="tg://user?id={final_winner}">@{final_winner_username}</a>'
+                            text += f"\n\n🏆 <b>{final_winner_mention} wins the match and earns ${winnings:.2f}!</b>"
                             # Unpin the message
                             if 'pinned_message_id' in match_data:
                                 try: await context.bot.unpin_chat_message(chat_id, match_data['pinned_message_id'])
@@ -13232,19 +13389,21 @@ async def message_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         else:
                             match_data["last_roller"] = None
                             match_data["player_rolls"] = {p1: [], p2: []}  # Reset rolls for next round
-                            text += f"\n\n<b>Next round:</b> {match_data['usernames'][p1]} rolls first! ({allowed_emojis[gtype]} emoji)"
+                            text += f"\n\n<b>Next round:</b> {p1_mention} rolls first! ({allowed_emojis[gtype]} emoji)"
 
                         await asyncio.sleep(HELPER_BOT_ANIMATION_DELAY)
                         await context.bot.send_message(chat_id=chat_id, text=text, parse_mode=ParseMode.HTML)
                     else:
                         other_id = [pid for pid in players if pid != user.id][0]
                         other_rolls = len(match_data["player_rolls"].get(other_id, []))
+                        # Safely get username with fallback
+                        other_username = match_data.get('usernames', {}).get(other_id, f"Player {other_id}")
                         if other_rolls == 0:
                             await asyncio.sleep(1)
-                            await update.message.reply_text(f"Your rolls complete! Waiting for {match_data['usernames'][other_id]} to start rolling.")
+                            await update.message.reply_text(f"Your rolls complete! Waiting for {other_username} to start rolling.")
                         elif other_rolls < game_rolls:
                             await asyncio.sleep(1)
-                            await update.message.reply_text(f"Your rolls complete! Waiting for {match_data['usernames'][other_id]} to finish ({other_rolls}/{game_rolls} done).")
+                            await update.message.reply_text(f"Your rolls complete! Waiting for {other_username} to finish ({other_rolls}/{game_rolls} done).")
                     return
         except Exception as e:
             logging.error(f"Error in PvP game handling: {e}", exc_info=True)
@@ -13661,6 +13820,15 @@ async def match_invite_callback(update: Update, context: ContextTypes.DEFAULT_TY
             match_data["player_rolls"] = {match_data["host_id"]: [], opponent_id: []}
         if "last_roller" not in match_data:
             match_data["last_roller"] = None
+        
+        # Ensure usernames are properly set for both players
+        if "usernames" not in match_data:
+            match_data["usernames"] = {}
+        # Update/ensure both player usernames are present
+        host_username = normalize_username(user_stats.get(match_data["host_id"], {}).get('userinfo', {}).get('username', '')) or f"ID{match_data['host_id']}"
+        opp_username = normalize_username(query.from_user.username) or normalize_username(user_stats.get(opponent_id, {}).get('userinfo', {}).get('username', '')) or f"ID{opponent_id}"
+        match_data["usernames"][match_data["host_id"]] = host_username
+        match_data["usernames"][opponent_id] = opp_username
         
         await ensure_user_in_wallets(match_data["host_id"], context=context)
         await ensure_user_in_wallets(opponent_id, context=context)
@@ -14391,12 +14559,12 @@ async def continue_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         multiplier = 2 ** game["streak"]
         win_amount = game["bet_amount"] * multiplier
         keyboard = [
-            [InlineKeyboardButton("🪙 Heads", callback_data=f"flip_pick_{game_id}_Heads"),
-             InlineKeyboardButton("🪙 Tails", callback_data=f"flip_pick_{game_id}_Tails")],
+            [apply_button_style(InlineKeyboardButton("🪙 Heads", callback_data=f"flip_pick_{game_id}_Heads"), 'primary'),
+             apply_button_style(InlineKeyboardButton("🪙 Tails", callback_data=f"flip_pick_{game_id}_Tails"), 'primary')],
         ]
         if game['streak'] > 0:
-            keyboard.append([InlineKeyboardButton(f"💸 Cash Out (${win_amount:.2f})", callback_data=f"flip_cashout_{game_id}")])
-        await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(keyboard))
+            keyboard.append([apply_button_style(InlineKeyboardButton(f"💸 Cash Out (${win_amount:.2f})", callback_data=f"flip_cashout_{game_id}"), 'success')])
+        await update.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=create_styled_keyboard(keyboard))
     # FIX: Add blackjack continuation
     elif game_type == 'blackjack':
         text = f"🃏 Resuming Blackjack (ID: <code>{game_id}</code>)..."
@@ -17973,14 +18141,16 @@ async def play_vs_bot_game_from_callback(query, context: ContextTypes.DEFAULT_TY
         
         game_sessions[game_id]["bot_rolls"] = bot_rolls
         bot_total = sum(bot_rolls)
-        bot_rolls_text = " + ".join(str(r) for r in bot_rolls)
+        bot_rolls_text = ROLL_SEPARATOR.join(str(r) for r in bot_rolls)
         
         game_sessions[game_id]["waiting_for"] = "user"
         
+        username_display = user.first_name if user.first_name else "Player"
         await context.bot.send_message(
             chat_id=chat_id,
-            text=f"🤖 Bot rolled: {bot_rolls_text} = <b>{bot_total}</b>\n\n"
-                 f"<b>Your turn!</b> Send {game_rolls} {emoji} emoji{'s' if game_rolls > 1 else ''} to respond.",
+            text=f"🤖 <b>BOT ROLLED FIRST!</b>\n\n"
+                 f"Bot rolled: [{bot_rolls_text}] = {bot_total}\n\n"
+                 f"{username_display}, Your turn! Send {game_rolls} {emoji} to respond.",
             parse_mode=ParseMode.HTML
         )
     else:
