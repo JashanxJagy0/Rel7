@@ -83,6 +83,9 @@ DEBUG_EMOJI_GAMES = False  # Set to True to enable detailed emoji game logging
 # Roll display separator for emoji games
 ROLL_SEPARATOR = ", "  # Separator for displaying multiple roll values (e.g., "4, 5, 6")
 
+# HiLow nonce offset for skip actions (to differentiate from pick draws)
+HILOW_SKIP_NONCE_OFFSET = 1000
+
 # Helper bot animation timing (faster than main bot)
 HELPER_BOT_ANIMATION_DELAY = 0.3  # Seconds to wait after helper bot sends animation (dice, slots, darts, etc.)
 
@@ -6713,7 +6716,7 @@ async def highlow_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Draw a random card from the remaining deck using provably fair RNG
         deck_size = len(game["deck"])
-        nonce_for_draw = game["nonce"] + game["streak"] + 1000  # Offset to differentiate from pick draws
+        nonce_for_draw = game["nonce"] + game["streak"] + HILOW_SKIP_NONCE_OFFSET  # Offset to differentiate from pick draws
         random_index = get_provably_fair_result(game["server_seed"], game["client_seed"], nonce_for_draw, deck_size)
         new_card = game["deck"].pop(random_index)
         game["current_card"] = new_card
@@ -8814,11 +8817,26 @@ async def slots_rebet_double_callback(update: Update, context: ContextTypes.DEFA
     )
 
 def extract_game_name(game_type: str) -> str:
-    """Extract readable game name from game_type string"""
+    """Extract readable game name from game_type string.
+    
+    Args:
+        game_type: The internal game type identifier (e.g., 'pvp_dice', 'pvb_bowl', 'group_challenge_darts')
+        
+    Returns:
+        The human-readable game name in uppercase (e.g., 'DICE', 'BOWL', 'DARTS')
+    """
     return game_type.replace('pvp_', '').replace('pvb_', '').replace('group_challenge_', '').replace('xdxw_', '').upper()
 
 # --- Helper function to check for ongoing emoji games ---
 def get_user_active_emoji_game(user_id: int):
+    """Check if a user has any ongoing PvP or PvB emoji game.
+    
+    Args:
+        user_id: The Telegram user ID to check
+        
+    Returns:
+        A tuple of (game_id: str, game_type: str) if an active game exists, otherwise (None, None)
+    """
     """
     Check if a user has any ongoing PvP or PvB emoji game.
     Returns (game_id, game_type) if found, otherwise (None, None).
